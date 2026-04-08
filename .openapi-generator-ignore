@@ -1,0 +1,11 @@
+# Files that should NOT be overwritten by openapi-generator.
+# Hand-crafted files live in _handcrafted/ and are copied back by regenerate.sh.
+src/client.rs
+src/error.rs
+src/machine.rs
+src/lib.rs
+Cargo.toml
+Makefile
+regenerate.sh
+README.md
+_handcrafted/
