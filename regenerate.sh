@@ -5,13 +5,40 @@ set -e
 # The spec version is embedded in firecracker.yaml (info.version field)
 # and is used to set the package version in Cargo.toml.
 
-SPEC_FILE="firecracker.yaml"
-SDK_NAME="firecracker-rust-sdk"
-
-if [ ! -f "$SPEC_FILE" ]; then
-    echo "ERROR: $SPEC_FILE not found. Run this script from the repo root."
+echo "==> Fetching latest Firecracker release tag..."
+if command -v curl >/dev/null 2>&1; then
+    LATEST_TAG=$(curl -sSL "https://api.github.com/repos/firecracker-microvm/firecracker/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+elif command -v wget >/dev/null 2>&1; then
+    LATEST_TAG=$(wget -qO- "https://api.github.com/repos/firecracker-microvm/firecracker/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+else
+    echo "ERROR: Neither curl nor wget found."
     exit 1
 fi
+
+if [ -z "$LATEST_TAG" ]; then
+    echo "ERROR: Could not determine latest release tag from GitHub API."
+    exit 1
+fi
+
+echo "    Latest release: $LATEST_TAG"
+SPEC_URL="https://raw.githubusercontent.com/firecracker-microvm/firecracker/${LATEST_TAG}/src/firecracker/swagger/firecracker.yaml"
+
+TEMP_DIR=$(mktemp -d)
+SPEC_FILE="$TEMP_DIR/firecracker.yaml"
+
+echo "==> Downloading OpenAPI spec from GitHub (tag: ${LATEST_TAG})..."
+if command -v curl >/dev/null 2>&1; then
+    curl -sSL "$SPEC_URL" -o "$SPEC_FILE"
+elif command -v wget >/dev/null 2>&1; then
+    wget -q "$SPEC_URL" -O "$SPEC_FILE"
+fi
+
+if [ ! -f "$SPEC_FILE" ]; then
+    echo "ERROR: Failed to download $SPEC_FILE"
+    exit 1
+fi
+
+SDK_NAME="firecracker-rust-sdk"
 
 # Extract API version from the spec
 API_VERSION=$(grep -m1 'version:' "$SPEC_FILE" | awk '{print $2}' | tr -d '"' | tr -d "'" | sed 's/-dev//')
@@ -186,7 +213,10 @@ echo "    Firecracker API version: $API_VERSION"
 echo "    Custom files (machine.rs, client.rs, error.rs) were preserved."
 echo "    Generated files (models/, src/lib.rs) have been updated."
 echo ""
+echo ""
 echo "Next steps:"
 echo "  1. Review changes: git diff"
 echo "  2. Tag the release: git tag v${API_VERSION}"
 echo "  3. Test: cargo test"
+
+rm -rf "$TEMP_DIR"

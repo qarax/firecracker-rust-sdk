@@ -1,0 +1,150 @@
+name: Sync with Firecracker
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "0 6 * * *" # daily at 6am UTC
+  workflow_dispatch: # allow manual trigger
+
+jobs:
+  sync:
+    name: Check and sync with latest Firecracker release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch latest Firecracker release tag
+        id: fc_latest
+        run: |
+          LATEST=$(curl -sSL "https://api.github.com/repos/firecracker-microvm/firecracker/releases/latest" \
+            | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+          if [ -z "$LATEST" ]; then
+            echo "ERROR: Could not fetch latest Firecracker release tag"
+            exit 1
+          fi
+          echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Latest Firecracker release: $LATEST"
+          
+          # Remove 'v' prefix for comparison
+          FC_VERSION="${LATEST#v}"
+          echo "version=$FC_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Read current tracked version
+        id: current
+        run: |
+          if [ -f ".firecracker-version" ]; then
+            CURRENT=$(cat .firecracker-version)
+          else
+            CURRENT="none"
+          fi
+          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "Current tracked SDK version: $CURRENT"
+
+      - name: Check if update is needed
+        id: needs_update
+        run: |
+          FC_VERSION="${{ steps.fc_latest.outputs.version }}"
+          CURRENT_VERSION="${{ steps.current.outputs.version }}"
+          
+          # Check if the SDK tag already exists in the repo
+          if git ls-remote --tags origin "refs/tags/v${FC_VERSION}" | grep -q .; then
+            TAG_EXISTS=true
+          else
+            TAG_EXISTS=false
+          fi
+
+          if [ "$FC_VERSION" = "$CURRENT_VERSION" ] && [ "$TAG_EXISTS" = "true" ]; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "Already up to date with Firecracker v${FC_VERSION} and tag v${FC_VERSION} exists, nothing to do."
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            if [ "$FC_VERSION" != "$CURRENT_VERSION" ]; then
+              echo "Update needed: SDK version changed ${CURRENT_VERSION} -> ${FC_VERSION}"
+            else
+              echo "Update needed: SDK tag v${FC_VERSION} does not exist yet"
+            fi
+          fi
+
+      - name: Install Java
+        if: steps.needs_update.outputs.needed == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Rust toolchain
+        if: steps.needs_update.outputs.needed == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Cache Rust dependencies
+        if: steps.needs_update.outputs.needed == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run regenerate.sh
+        if: steps.needs_update.outputs.needed == 'true'
+        run: |
+          chmod +x regenerate.sh
+          ./regenerate.sh
+          
+          # Force Cargo.toml to use the explicit tag version we are syncing against
+          # because the internal swagger file might not have the fully bumped patch version
+          sed -i 's/^version = ".*"/version = "${{ steps.fc_latest.outputs.version }}"/' Cargo.toml
+          echo "${{ steps.fc_latest.outputs.version }}" > .firecracker-version
+
+      - name: Commit and push changes
+        if: steps.needs_update.outputs.needed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: sync with Firecracker ${{ steps.fc_latest.outputs.tag }}"
+          git push origin main
+
+      - name: Create and push tag
+        if: steps.needs_update.outputs.needed == 'true'
+        run: |
+          TAG="${{ steps.fc_latest.outputs.tag }}"
+          git tag -a "$TAG" -m "Release $TAG (Firecracker ${{ steps.fc_latest.outputs.tag }})"
+          git push origin "$TAG"
+
+      - name: Create GitHub Release
+        if: steps.needs_update.outputs.needed == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.fc_latest.outputs.tag }}
+          name: ${{ steps.fc_latest.outputs.tag }}
+          generate_release_notes: true
+          body: |
+            ## firecracker-rust-sdk ${{ steps.fc_latest.outputs.tag }}
+
+            Automatically synced with **Firecracker ${{ steps.fc_latest.outputs.tag }}**.
+
+            ### Usage
+
+            **Pin to this release:**
+            ```toml
+            firecracker-rust-sdk = { git = "https://github.com/${{ github.repository }}", tag = "${{ steps.fc_latest.outputs.tag }}" }
+            ```
+
+            **Always use latest main:**
+            ```toml
+            firecracker-rust-sdk = { git = "https://github.com/${{ github.repository }}", branch = "main" }
+            ```

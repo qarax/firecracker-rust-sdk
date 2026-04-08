@@ -42,7 +42,7 @@ We provide several standalone examples demonstrating how to boot and control mic
 
 1. Download the Firecracker binary:
 ```bash
-wget https://github.com/firecracker-microvm/firecracker/releases/download/v1.10.1/firecracker-v1.10.1-x86_64 -O firecracker
+wget https://github.com/firecracker-microvm/firecracker/releases/download/v1.15.1/firecracker-v1.15.1-x86_64 -O firecracker
 chmod +x firecracker
 ```
 
