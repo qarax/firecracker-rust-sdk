@@ -3,7 +3,7 @@ name: Sync with Firecracker
 on:
   push:
     branches:
-      - main
+      - master 
   schedule:
     - cron: "0 6 * * *" # daily at 6am UTC
   workflow_dispatch: # allow manual trigger
@@ -116,7 +116,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "chore: sync with Firecracker ${{ steps.fc_latest.outputs.tag }}"
-          git push origin main
+          git push origin master
 
       - name: Create and push tag
         if: steps.needs_update.outputs.needed == 'true'
@@ -144,7 +144,7 @@ jobs:
             firecracker-rust-sdk = { git = "https://github.com/${{ github.repository }}", tag = "${{ steps.fc_latest.outputs.tag }}" }
             ```
 
-            **Always use latest main:**
+            **Always use latest master:**
             ```toml
-            firecracker-rust-sdk = { git = "https://github.com/${{ github.repository }}", branch = "main" }
+            firecracker-rust-sdk = { git = "https://github.com/${{ github.repository }}", branch = "master" }
             ```
