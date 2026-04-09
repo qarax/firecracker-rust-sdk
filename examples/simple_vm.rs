@@ -75,7 +75,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?;
 
-
     println!("Starting instance...");
     let mut vm = machine.start_instance().await?;
 

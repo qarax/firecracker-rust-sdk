@@ -42,7 +42,6 @@ docs/TokenBucket.md
 docs/VcpuFeatures.md
 docs/Vm.md
 docs/Vsock.md
-docs/VsockOverride.md
 git_push.sh
 src/apis/configuration.rs
 src/apis/default_api.rs
@@ -89,4 +88,3 @@ src/models/token_bucket.rs
 src/models/vcpu_features.rs
 src/models/vm.rs
 src/models/vsock.rs
-src/models/vsock_override.rs

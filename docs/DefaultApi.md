@@ -555,7 +555,7 @@ Updates the MMDS data store.
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**body** | Option<[**std::collections::HashMap<String, serde_json::Value>**](serde_json::Value.md)> | The MMDS data store patch JSON. |  |
+**body** | Option<[**std::collections::HashMap<String, serde_json::Value>**](SerdeJson__Value.md)> | The MMDS data store patch JSON. |  |
 
 ### Return type
 
@@ -972,7 +972,7 @@ Creates a MMDS (Microvm Metadata Service) data store.
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**body** | Option<[**std::collections::HashMap<String, serde_json::Value>**](serde_json::Value.md)> | The MMDS data store as JSON. |  |
+**body** | Option<[**std::collections::HashMap<String, serde_json::Value>**](SerdeJson__Value.md)> | The MMDS data store as JSON. |  |
 
 ### Return type
 

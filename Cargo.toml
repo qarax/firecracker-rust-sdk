@@ -1,6 +1,6 @@
 [package]
 name = "firecracker-rust-sdk"
-version = "1.16.0"
+version = "1.15.1"
 authors = ["Benny Zlotnik"]
 description = "Rust SDK for the Firecracker microVM REST API"
 license = "Apache-2.0"

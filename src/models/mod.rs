@@ -80,5 +80,3 @@ pub mod vm;
 pub use self::vm::Vm;
 pub mod vsock;
 pub use self::vsock::Vsock;
-pub mod vsock_override;
-pub use self::vsock_override::VsockOverride;
