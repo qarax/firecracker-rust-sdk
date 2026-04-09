@@ -3,7 +3,7 @@ name: Sync with Firecracker
 on:
   push:
     branches:
-      - master 
+      - master
   schedule:
     - cron: "0 6 * * *" # daily at 6am UTC
   workflow_dispatch: # allow manual trigger

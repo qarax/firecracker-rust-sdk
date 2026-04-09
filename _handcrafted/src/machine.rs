@@ -1,4 +1,4 @@
-use std::{borrow::Cow, path::Path};
+use std::{borrow::Cow, path::{Path, PathBuf}};
 
 use crate::{
     client::{HttpClient, TokioIo},
@@ -86,6 +86,25 @@ impl<'m> Machine<'m> {
         })
     }
 
+    /// Attaches to a Firecracker process you spawned yourself.
+    ///
+    /// Waits for the socket to become available (up to 5 s), then returns a
+    /// [`Machine`] ready for pre-boot configuration. Unlike [`Machine::start`],
+    /// this does **not** spawn a process — process lifecycle is the caller's
+    /// responsibility.
+    pub async fn attach(socket_path: impl Into<PathBuf>) -> Result<Machine<'static>, Error> {
+        let socket_path = socket_path.into();
+        let client = Self::build_client(&socket_path).await?;
+        Ok(Machine {
+            config: MachineConfig {
+                vm_id: Uuid::nil(),
+                socket_path: Cow::Owned(socket_path),
+                exec_path: Cow::Owned(PathBuf::new()),
+            },
+            client,
+        })
+    }
+
     // ── Pre-boot configuration helpers ───────────────────────────────────────
 
     /// Configures the boot source (kernel + optional initrd + boot args).
@@ -117,27 +136,36 @@ impl<'m> Machine<'m> {
     }
 
     /// Starts the microVM (equivalent to `InstanceStart` action).
-    pub async fn start_instance(&mut self) -> Result<MicroVm<'_>, Error> {
+    ///
+    /// Consumes the [`Machine`] and returns a [`MicroVm`] handle for
+    /// post-boot operations. The connection is refreshed so the returned
+    /// [`MicroVm`] has a clean HTTP/1.1 connection.
+    pub async fn start_instance(mut self) -> Result<MicroVm<'m>, Error> {
         #[derive(Serialize)]
         struct Action {
             action_type: &'static str,
         }
-        self.put(
-            "/actions",
-            &Action {
-                action_type: "InstanceStart",
-            },
-        )
-        .await?;
+        self.put("/actions", &Action { action_type: "InstanceStart" })
+            .await?;
+        self.client = Self::build_client(&self.config.socket_path).await?;
+        Ok(MicroVm { machine: self })
+    }
 
-        // SAFETY: we move `self` into MicroVm – the borrow ends here.
-        // Re-borrow the machine from the returned struct instead.
-        Ok(MicroVm {
-            machine: Machine {
-                config: self.config.clone(),
-                client: Self::build_client(&self.config.socket_path).await?,
-            },
-        })
+    /// Loads a snapshot and resumes the VM in one step.
+    ///
+    /// Consumes the [`Machine`] (which must be freshly spawned with no prior
+    /// configuration) and returns a running [`MicroVm`]. Set
+    /// `params.resume_vm = Some(true)` to resume automatically.
+    pub async fn load_and_resume(mut self, params: &SnapshotLoadParams) -> Result<MicroVm<'m>, Error> {
+        self.put("/snapshot/load", params).await?;
+        self.client = Self::build_client(&self.config.socket_path).await?;
+        Ok(MicroVm { machine: self })
+    }
+
+    /// Wraps this pre-boot [`Machine`] in a [`MicroVm`] without sending
+    /// `InstanceStart`. Use for recovery when the VM is already running.
+    pub fn assume_running(self) -> MicroVm<'m> {
+        MicroVm { machine: self }
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
