@@ -20,6 +20,7 @@ Method | HTTP request | Description
 [**patch_balloon_stats_interval**](DefaultApi.md#patch_balloon_stats_interval) | **PATCH** /balloon/statistics | Updates a balloon device statistics polling interval.
 [**patch_guest_drive_by_id**](DefaultApi.md#patch_guest_drive_by_id) | **PATCH** /drives/{drive_id} | Updates the properties of a drive. Post-boot only.
 [**patch_guest_network_interface_by_id**](DefaultApi.md#patch_guest_network_interface_by_id) | **PATCH** /network-interfaces/{iface_id} | Updates the rate limiters applied to a network interface. Post-boot only.
+[**patch_guest_pmem_by_id**](DefaultApi.md#patch_guest_pmem_by_id) | **PATCH** /pmem/{id} | Updates the rate limiter of a pmem device. Post-boot only.
 [**patch_machine_configuration**](DefaultApi.md#patch_machine_configuration) | **PATCH** /machine-config | Partially updates the Machine Configuration of the VM. Pre-boot only.
 [**patch_memory_hotplug**](DefaultApi.md#patch_memory_hotplug) | **PATCH** /hotplug/memory | Updates the size of the hotpluggable memory region
 [**patch_mmds**](DefaultApi.md#patch_mmds) | **PATCH** /mmds | Updates the MMDS data store.
@@ -468,6 +469,37 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **iface_id** | **String** | The id of the guest network interface | [required] |
 **body** | [**PartialNetworkInterface**](PartialNetworkInterface.md) | A subset of the guest network interface properties | [required] |
+
+### Return type
+
+ (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: application/json
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## patch_guest_pmem_by_id
+
+> patch_guest_pmem_by_id(id, body)
+Updates the rate limiter of a pmem device. Post-boot only.
+
+Updates the rate limiter applied to the pmem device with the ID specified by the id path parameter.
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**id** | **String** | The id of the guest pmem device | [required] |
+**body** | [**PartialPmem**](PartialPmem.md) | Pmem rate limiter properties | [required] |
 
 ### Return type
 

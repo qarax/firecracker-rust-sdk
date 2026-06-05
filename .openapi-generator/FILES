@@ -33,6 +33,7 @@ docs/NetworkInterface.md
 docs/NetworkOverride.md
 docs/PartialDrive.md
 docs/PartialNetworkInterface.md
+docs/PartialPmem.md
 docs/Pmem.md
 docs/RateLimiter.md
 docs/SerialDevice.md
@@ -42,6 +43,7 @@ docs/TokenBucket.md
 docs/VcpuFeatures.md
 docs/Vm.md
 docs/Vsock.md
+docs/VsockOverride.md
 git_push.sh
 src/apis/configuration.rs
 src/apis/default_api.rs
@@ -79,6 +81,7 @@ src/models/network_interface.rs
 src/models/network_override.rs
 src/models/partial_drive.rs
 src/models/partial_network_interface.rs
+src/models/partial_pmem.rs
 src/models/pmem.rs
 src/models/rate_limiter.rs
 src/models/serial_device.rs
@@ -88,3 +91,4 @@ src/models/token_bucket.rs
 src/models/vcpu_features.rs
 src/models/vm.rs
 src/models/vsock.rs
+src/models/vsock_override.rs

@@ -11,16 +11,21 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// EntropyDevice : Defines an entropy device.
+/// PartialPmem : Defines a partial pmem device structure, used to update the rate limiter for that device, after microvm start.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct EntropyDevice {
+pub struct PartialPmem {
+    #[serde(rename = "id")]
+    pub id: String,
     #[serde(rename = "rate_limiter", skip_serializing_if = "Option::is_none")]
     pub rate_limiter: Option<Box<models::RateLimiter>>,
 }
 
-impl EntropyDevice {
-    /// Defines an entropy device.
-    pub fn new() -> EntropyDevice {
-        EntropyDevice { rate_limiter: None }
+impl PartialPmem {
+    /// Defines a partial pmem device structure, used to update the rate limiter for that device, after microvm start.
+    pub fn new(id: String) -> PartialPmem {
+        PartialPmem {
+            id,
+            rate_limiter: None,
+        }
     }
 }
