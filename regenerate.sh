@@ -1,222 +1,115 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-# Regenerate firecracker-rust-sdk from the Firecracker OpenAPI spec
-# The spec version is embedded in firecracker.yaml (info.version field)
-# and is used to set the package version in Cargo.toml.
+# Regenerate the Firecracker SDK models from the upstream OpenAPI spec.
+#
+# This is the same script the sync workflow runs, so a local run produces the
+# same result as CI.
+#
+# Environment:
+#   FC_TAG                     Firecracker release to generate from
+#                              (default: the latest release)
+#   OPENAPI_GENERATOR_VERSION  openapi-generator version (default: the version
+#                              pinned in openapitools.json)
+#   GITHUB_TOKEN               optional, authenticates GitHub API requests
+#
+# Hand-written code (src/lib.rs, src/machine.rs, src/client.rs, src/error.rs,
+# Cargo.toml) is protected by .openapi-generator-ignore; edit it in place.
 
-echo "==> Fetching latest Firecracker release tag..."
-if command -v curl >/dev/null 2>&1; then
-    LATEST_TAG=$(curl -sSL "https://api.github.com/repos/firecracker-microvm/firecracker/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
-elif command -v wget >/dev/null 2>&1; then
-    LATEST_TAG=$(wget -qO- "https://api.github.com/repos/firecracker-microvm/firecracker/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
-else
-    echo "ERROR: Neither curl nor wget found."
-    exit 1
-fi
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
-if [ -z "$LATEST_TAG" ]; then
-    echo "ERROR: Could not determine latest release tag from GitHub API."
-    exit 1
-fi
+UPSTREAM_REPO="firecracker-microvm/firecracker"
+SPEC_FILE="firecracker.yaml"
 
-echo "    Latest release: $LATEST_TAG"
-SPEC_URL="https://raw.githubusercontent.com/firecracker-microvm/firecracker/${LATEST_TAG}/src/firecracker/swagger/firecracker.yaml"
-
-TEMP_DIR=$(mktemp -d)
-SPEC_FILE="$TEMP_DIR/firecracker.yaml"
-
-echo "==> Downloading OpenAPI spec from GitHub (tag: ${LATEST_TAG})..."
-if command -v curl >/dev/null 2>&1; then
-    curl -sSL "$SPEC_URL" -o "$SPEC_FILE"
-elif command -v wget >/dev/null 2>&1; then
-    wget -q "$SPEC_URL" -O "$SPEC_FILE"
-fi
-
-if [ ! -f "$SPEC_FILE" ]; then
-    echo "ERROR: Failed to download $SPEC_FILE"
-    exit 1
-fi
-
-SDK_NAME="firecracker-rust-sdk"
-
-# Extract API version from the spec
-API_VERSION=$(grep -m1 'version:' "$SPEC_FILE" | awk '{print $2}' | tr -d '"' | tr -d "'" | sed 's/-dev//')
-if [ -z "$API_VERSION" ]; then
-    echo "WARNING: Could not extract version from $SPEC_FILE, defaulting to 0.1.0"
-    API_VERSION="0.1.0"
-fi
-echo "==> Firecracker API version: $API_VERSION"
-
-echo "==> Fetching latest OpenAPI Generator version..."
-if command -v curl > /dev/null 2>&1; then
-    GENERATOR_VERSION=$(curl -sSL "https://api.github.com/repos/OpenAPITools/openapi-generator/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"v\([^"]*\)".*/\1/')
-elif command -v wget > /dev/null 2>&1; then
-    GENERATOR_VERSION=$(wget -qO- "https://api.github.com/repos/OpenAPITools/openapi-generator/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"v\([^"]*\)".*/\1/')
-fi
-
-if [ -z "$GENERATOR_VERSION" ]; then
-    echo "    WARNING: Could not fetch latest generator version, falling back to 7.10.0"
-    GENERATOR_VERSION="7.10.0"
-fi
-echo "    Latest OpenAPI Generator: v${GENERATOR_VERSION}"
-
-GENERATOR_JAR="openapi-generator-cli.jar"
-GENERATOR_URL="https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/${GENERATOR_VERSION}/openapi-generator-cli-${GENERATOR_VERSION}.jar"
-
-# Function to check if command exists
 command_exists() {
-    command -v "$1" > /dev/null 2>&1
+	command -v "$1" >/dev/null 2>&1
 }
 
-# Function to get openapi-generator command
-get_generator_cmd() {
-    # Check if openapi-generator-cli is available via npm
-    if command_exists openapi-generator-cli; then
-        echo "openapi-generator-cli"
-        return 0
-    fi
-
-    # Check if we have the JAR file locally and it matches the desired version
-    if [ -f ".openapi-generator/$GENERATOR_JAR" ] && [ -f ".openapi-generator/generator-version" ]; then
-        CACHED_VERSION=$(cat ".openapi-generator/generator-version")
-        if [ "$CACHED_VERSION" = "$GENERATOR_VERSION" ]; then
-            echo "java -jar .openapi-generator/$GENERATOR_JAR"
-            return 0
-        fi
-        echo "==> Cached generator version ($CACHED_VERSION) differs from latest ($GENERATOR_VERSION), re-downloading..." >&2
-    fi
-
-    # Download the JAR file
-    echo "==> Downloading OpenAPI Generator v${GENERATOR_VERSION}..." >&2
-    mkdir -p .openapi-generator
-
-    if command_exists curl; then
-        curl -sSL "$GENERATOR_URL" -o ".openapi-generator/$GENERATOR_JAR"
-    elif command_exists wget; then
-        wget -q "$GENERATOR_URL" -O ".openapi-generator/$GENERATOR_JAR"
-    else
-        echo "ERROR: Neither curl nor wget found. Please install one of them." >&2
-        exit 1
-    fi
-
-    echo "$GENERATOR_VERSION" > ".openapi-generator/generator-version"
-    echo "java -jar .openapi-generator/$GENERATOR_JAR"
+# fetch URL [OUTPUT]: fail on HTTP errors instead of saving an error page.
+fetch() {
+	local auth=()
+	if [ -n "${GITHUB_TOKEN:-}" ] && [[ "$1" == https://api.github.com/* ]]; then
+		auth=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+	fi
+	if [ $# -gt 1 ]; then
+		curl -fsSL "${auth[@]}" "$1" -o "$2"
+	else
+		curl -fsSL "${auth[@]}" "$1"
+	fi
 }
 
-# Check for Java
-if ! command_exists java; then
-    echo "ERROR: Java is not installed. Please install Java JRE/JDK (version 8 or later)."
-    echo ""
-    echo "Installation options:"
-    echo "  - Arch Linux: sudo pacman -S jre-openjdk"
-    echo "  - Ubuntu/Debian: sudo apt install default-jre"
-    echo "  - Fedora: sudo dnf install java-latest-openjdk"
-    echo ""
-    echo "Or install openapi-generator-cli via npm:"
-    echo "  npm install -g @openapitools/openapi-generator-cli"
-    exit 1
-fi
-
-GENERATOR_CMD=$(get_generator_cmd)
-
-echo "==> Generating SDK with openapi-generator..."
-echo "    Using: $GENERATOR_CMD"
-$GENERATOR_CMD generate \
-    -i "$SPEC_FILE" \
-    -g rust \
-    -o . \
-    --additional-properties=packageName=${SDK_NAME},packageVersion=${API_VERSION}
-
-echo "==> Writing version file..."
-echo "$API_VERSION" > .firecracker-version
-
-echo "==> Applying post-generation patches..."
-
-# The generated Cargo.toml uses packageName as the crate name but we need the
-# lib name to use underscores. Patch it to add an explicit [lib] section.
-if ! grep -q '^\[lib\]' Cargo.toml; then
-    # Insert [lib] section after [package]
-    awk '/^\[dependencies\]/{print "[lib]"; print "name = \"firecracker_rust_sdk\""; print "path = \"src/lib.rs\""; print ""; print $0; next}1' Cargo.toml > Cargo.toml.tmp && mv Cargo.toml.tmp Cargo.toml
-    echo "    Patched Cargo.toml to add [lib] section"
-fi
-
-# Add extra dependencies not included by generator that our hand-crafted files need
-if ! grep -q 'thiserror' Cargo.toml; then
-    echo 'thiserror = "2"' >> Cargo.toml
-fi
-if ! grep -q 'uuid' Cargo.toml; then
-    echo 'uuid = { version = "1.0", features = ["serde", "v4"] }' >> Cargo.toml
-fi
-if ! grep -q 'tracing' Cargo.toml; then
-    echo 'tracing = "0.1"' >> Cargo.toml
-fi
-if ! grep -q 'pin-project-lite' Cargo.toml; then
-    echo 'pin-project-lite = "0.2"' >> Cargo.toml
-fi
-if ! grep -q 'futures' Cargo.toml; then
-    echo 'futures = "0.3"' >> Cargo.toml
-fi
-if ! grep -q 'http-body-util' Cargo.toml; then
-    echo 'http-body-util = "0.1"' >> Cargo.toml
-fi
-if ! grep -q 'hyper' Cargo.toml; then
-    echo 'hyper = { version = "1", features = ["client", "http1"] }' >> Cargo.toml
-fi
-
-# Enable serde's derive feature – required so that #[derive(Serialize)] works on
-# local structs inside async functions in machine.rs.
-sed -i 's/^serde = "[^"]*"/serde = { version = "1.0", features = ["derive"] }/' Cargo.toml
-# If serde already has a features array, add "derive" if missing
-sed -i '/^serde = {/{ /features/{ /"derive"/!s/\(features = \[\)/\1"derive", / } }' Cargo.toml
-echo "    Ensured serde has derive feature"
-
-# Overwrite lib.rs to expose our hand-crafted modules alongside generated ones
-cat > src/lib.rs << 'EOF'
-#![allow(unused_imports)]
-#![allow(dead_code)]
-
-#[macro_use]
-extern crate serde_derive;
-
-pub mod client;
-pub mod error;
-pub mod machine;
-#[allow(clippy::empty_docs, clippy::derivable_impls)]
-pub mod models;
-EOF
-
-echo "    Patched src/lib.rs"
-
-echo "==> Copying hand-crafted source files..."
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# client.rs, error.rs, machine.rs are hand-crafted – copy them from the
-# _handcrafted/ directory if they exist there (i.e. they were not overwritten
-# by the generator) otherwise they were already in place.
-for f in client.rs error.rs machine.rs; do
-    if [ -f "_handcrafted/src/$f" ]; then
-        cp "_handcrafted/src/$f" "src/$f"
-        echo "    Restored src/$f from _handcrafted/"
-    fi
+for cmd in curl java cargo; do
+	if ! command_exists "$cmd"; then
+		echo "ERROR: $cmd is required." >&2
+		exit 1
+	fi
 done
+
+if [ -z "${FC_TAG:-}" ]; then
+	echo "==> Fetching latest Firecracker release tag..."
+	FC_TAG=$(fetch "https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest" |
+		sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+	if [ -z "$FC_TAG" ]; then
+		echo "ERROR: Could not determine the latest release tag." >&2
+		exit 1
+	fi
+fi
+echo "    Firecracker release: ${FC_TAG}"
+
+# The SDK is versioned and tagged like the Firecracker release it tracks.
+SDK_VERSION="${FC_TAG#v}"
+if ! [[ "$SDK_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+	echo "ERROR: Cannot derive an SDK version from tag ${FC_TAG}." >&2
+	exit 1
+fi
+
+# The generator version is pinned so a new generator release can't change the
+# output (or break the build) on its own. Bump it in openapitools.json.
+if [ -z "${OPENAPI_GENERATOR_VERSION:-}" ]; then
+	OPENAPI_GENERATOR_VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' openapitools.json | head -1)
+fi
+if [ -z "$OPENAPI_GENERATOR_VERSION" ]; then
+	echo "ERROR: No openapi-generator version pinned in openapitools.json." >&2
+	exit 1
+fi
+echo "    openapi-generator: v${OPENAPI_GENERATOR_VERSION}"
+
+GENERATOR_JAR=".openapi-generator/openapi-generator-cli-${OPENAPI_GENERATOR_VERSION}.jar"
+if [ ! -f "$GENERATOR_JAR" ]; then
+	echo "==> Downloading openapi-generator v${OPENAPI_GENERATOR_VERSION}..."
+	mkdir -p .openapi-generator
+	fetch "https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/${OPENAPI_GENERATOR_VERSION}/openapi-generator-cli-${OPENAPI_GENERATOR_VERSION}.jar" \
+		"${GENERATOR_JAR}.tmp"
+	mv "${GENERATOR_JAR}.tmp" "$GENERATOR_JAR"
+fi
+
+# Keep the spec in the repo so sync commits show the upstream API diff.
+echo "==> Downloading OpenAPI spec (${FC_TAG})..."
+fetch "https://raw.githubusercontent.com/${UPSTREAM_REPO}/${FC_TAG}/src/firecracker/swagger/firecracker.yaml" "${SPEC_FILE}.tmp"
+mv "${SPEC_FILE}.tmp" "$SPEC_FILE"
+
+echo "==> Generating SDK..."
+java -jar "$GENERATOR_JAR" generate \
+	-i "$SPEC_FILE" \
+	-g rust \
+	-o . \
+	--additional-properties=packageName=firecracker-rust-sdk,packageVersion="${SDK_VERSION}"
+
+echo "==> Updating version metadata..."
+echo "$SDK_VERSION" >.firecracker-version
+sed -i "0,/^version = \".*\"/s//version = \"${SDK_VERSION}\"/" Cargo.toml
+sed -i "s|${UPSTREAM_REPO}/releases/download/v[0-9.]*/firecracker-v[0-9.]*-|${UPSTREAM_REPO}/releases/download/${FC_TAG}/firecracker-${FC_TAG}-|g" README.md
 
 echo "==> Formatting code..."
 cargo fmt
 
-echo "==> Building to verify..."
-cargo build
+echo "==> Building to verify (including examples)..."
+cargo build --all-targets
 
 echo ""
-echo "==> Regeneration complete!"
-echo "    Firecracker API version: $API_VERSION"
-echo "    Custom files (machine.rs, client.rs, error.rs) were preserved."
-echo "    Generated files (models/, src/lib.rs) have been updated."
-echo ""
+echo "==> Regeneration complete: Firecracker ${FC_TAG} -> SDK v${SDK_VERSION}"
 echo ""
 echo "Next steps:"
 echo "  1. Review changes: git diff"
-echo "  2. Tag the release: git tag v${API_VERSION}"
-echo "  3. Test: cargo test"
-
-rm -rf "$TEMP_DIR"
+echo "  2. Update src/lib.rs or src/machine.rs if the API changed"
+echo "  3. Test: cargo clippy --all-targets -- -D warnings && cargo test"
