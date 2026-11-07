@@ -69,10 +69,13 @@ See [`examples/README.md`](examples/README.md) for more details.
 
 ## Development
 
-The SDK models and base API clients are generated from `firecracker.yaml`.
-If you need to update the API version:
+The SDK models are generated from the upstream Firecracker OpenAPI spec, kept in the repo as `firecracker.yaml`. To regenerate:
 
 ```bash
-# Downloads the openapi-generator-cli and re-generates the code
-make regenerate
+./regenerate.sh                 # latest Firecracker release
+FC_TAG=v1.17.0 ./regenerate.sh  # a specific release
 ```
+
+The script downloads the spec and the openapi-generator version pinned in `openapitools.json`, regenerates `src/models/` and `docs/`, updates the `Cargo.toml` version and `.firecracker-version`, and builds everything. `src/lib.rs`, `src/machine.rs`, `src/client.rs`, `src/error.rs` and `Cargo.toml` are hand-written and protected by `.openapi-generator-ignore`.
+
+The [sync workflow](.github/workflows/sync.yml) runs the same script daily: when Firecracker releases, it regenerates, runs clippy and the tests, then tags and releases the SDK. If the new API breaks the hand-written code, it opens an issue instead; regenerate locally, fix the code and merge it, and the next run publishes the release.
