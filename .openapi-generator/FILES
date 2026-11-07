@@ -1,4 +1,3 @@
-.gitignore
 .travis.yml
 docs/ArmRegisterModifier.md
 docs/Balloon.md
@@ -7,6 +6,7 @@ docs/BalloonStartCmd.md
 docs/BalloonStats.md
 docs/BalloonStatsUpdate.md
 docs/BalloonUpdate.md
+docs/BlockTopology.md
 docs/BootSource.md
 docs/CpuConfig.md
 docs/CpuTemplate.md
@@ -55,6 +55,7 @@ src/models/balloon_start_cmd.rs
 src/models/balloon_stats.rs
 src/models/balloon_stats_update.rs
 src/models/balloon_update.rs
+src/models/block_topology.rs
 src/models/boot_source.rs
 src/models/cpu_config.rs
 src/models/cpu_template.rs

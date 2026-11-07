@@ -13,6 +13,7 @@ Name | Type | Description | Notes
 **network_overrides** | Option<[**Vec<models::NetworkOverride>**](NetworkOverride.md)> | Network host device names to override | [optional]
 **vsock_override** | Option<[**models::VsockOverride**](VsockOverride.md)> |  | [optional]
 **clock_realtime** | Option<**bool**> | [x86_64 only] When set to true, passes KVM_CLOCK_REALTIME to KVM_SET_CLOCK on restore, advancing kvmclock by the wall-clock time elapsed since the snapshot was taken. When false (default), kvmclock resumes from where it was at snapshot time. This option may be extended to other clock sources and CPU architectures in the future. | [optional]
+**huge_pages** | Option<**HugePages**> | Selects the huge pages configuration for the restored microVM. Snapshot reuses the value serialized in the snapshot and is the default when this field is omitted; None uses the host's default memory-mapping behavior. Explicit hugetlbfs (`2M`) pages require a UFFD memory backend. With UFFD, the effectiveness of transparent huge pages may be limited. (enum: Snapshot, None, Transparent, 2M) | [optional]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

@@ -12,6 +12,8 @@ pub mod balloon_stats_update;
 pub use self::balloon_stats_update::BalloonStatsUpdate;
 pub mod balloon_update;
 pub use self::balloon_update::BalloonUpdate;
+pub mod block_topology;
+pub use self::block_topology::BlockTopology;
 pub mod boot_source;
 pub use self::boot_source::BootSource;
 pub mod cpu_config;
