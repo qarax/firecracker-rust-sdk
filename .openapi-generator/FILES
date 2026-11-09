@@ -14,6 +14,8 @@ docs/CpuidLeafModifier.md
 docs/CpuidRegisterModifier.md
 docs/DefaultApi.md
 docs/Drive.md
+docs/EnclaveConfig.md
+docs/EnclaveNumaNode.md
 docs/EntropyDevice.md
 docs/Error.md
 docs/FirecrackerVersion.md
@@ -62,6 +64,8 @@ src/models/cpu_template.rs
 src/models/cpuid_leaf_modifier.rs
 src/models/cpuid_register_modifier.rs
 src/models/drive.rs
+src/models/enclave_config.rs
+src/models/enclave_numa_node.rs
 src/models/entropy_device.rs
 src/models/error.rs
 src/models/firecracker_version.rs

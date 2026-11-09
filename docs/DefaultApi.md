@@ -10,6 +10,7 @@ Method | HTTP request | Description
 [**describe_balloon_hinting**](DefaultApi.md#describe_balloon_hinting) | **GET** /balloon/hinting/status | Returns the balloon hinting statistics, only if enabled pre-boot.
 [**describe_balloon_stats**](DefaultApi.md#describe_balloon_stats) | **GET** /balloon/statistics | Returns the latest balloon device statistics, only if enabled pre-boot.
 [**describe_instance**](DefaultApi.md#describe_instance) | **GET** / | Returns general information about an instance.
+[**get_enclave_configuration**](DefaultApi.md#get_enclave_configuration) | **GET** /enclave | Gets the Nitro Enclave VM configuration.
 [**get_export_vm_config**](DefaultApi.md#get_export_vm_config) | **GET** /vm/config | Gets the full VM configuration.
 [**get_firecracker_version**](DefaultApi.md#get_firecracker_version) | **GET** /version | Gets the Firecracker version.
 [**get_machine_configuration**](DefaultApi.md#get_machine_configuration) | **GET** /machine-config | Gets the machine configuration of the VM.
@@ -27,6 +28,7 @@ Method | HTTP request | Description
 [**patch_vm**](DefaultApi.md#patch_vm) | **PATCH** /vm | Updates the microVM state.
 [**put_balloon**](DefaultApi.md#put_balloon) | **PUT** /balloon | Creates or updates a balloon device.
 [**put_cpu_configuration**](DefaultApi.md#put_cpu_configuration) | **PUT** /cpu-config | Configures CPU features flags for the vCPUs of the guest VM. Pre-boot only.
+[**put_enclave_configuration**](DefaultApi.md#put_enclave_configuration) | **PUT** /enclave | Configures the Nitro Enclave options. Pre-boot only.
 [**put_entropy_device**](DefaultApi.md#put_entropy_device) | **PUT** /entropy | Creates an entropy device. Pre-boot only.
 [**put_guest_boot_source**](DefaultApi.md#put_guest_boot_source) | **PUT** /boot-source | Creates or updates the boot source. Pre-boot only.
 [**put_guest_drive_by_id**](DefaultApi.md#put_guest_drive_by_id) | **PUT** /drives/{drive_id} | Creates or updates a drive. Pre-boot only.
@@ -190,6 +192,33 @@ This endpoint does not need any parameter.
 ### Return type
 
 [**models::InstanceInfo**](InstanceInfo.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## get_enclave_configuration
+
+> models::EnclaveConfig get_enclave_configuration()
+Gets the Nitro Enclave VM configuration.
+
+Returns the VM's enclave-specific configuration options.
+
+### Parameters
+
+This endpoint does not need any parameter.
+
+### Return type
+
+[**models::EnclaveConfig**](EnclaveConfig.md)
 
 ### Authorization
 
@@ -695,6 +724,36 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 
+## put_enclave_configuration
+
+> put_enclave_configuration(body)
+Configures the Nitro Enclave options. Pre-boot only.
+
+Configures Firecracker to launch a Nitro Enclave backed guest. Omitted properties use their documented defaults. This operation fails after the guest has started or when the configuration is invalid.
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**body** | [**EnclaveConfig**](EnclaveConfig.md) | Nitro Enclave configuration | [required] |
+
+### Return type
+
+ (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: application/json
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
 ## put_entropy_device
 
 > put_entropy_device(body)
@@ -911,7 +970,7 @@ No authorization required
 > put_machine_configuration(body)
 Updates the Machine Configuration of the VM. Pre-boot only.
 
-Updates the Virtual Machine Configuration with the specified input. Firecracker starts with default values for vCPU count (=1) and memory size (=128 MiB). The vCPU count is restricted to the [1, 32] range. With SMT enabled, the vCPU count is required to be either 1 or an even number in the range. otherwise there are no restrictions regarding the vCPU count. If 2M hugetlbfs pages are specified, then `mem_size_mib` must be a multiple of 2. If any of the parameters has an incorrect value, the whole update fails. All parameters that are optional and are not specified are set to their default values (smt = false, track_dirty_pages = false, cpu_template = None, huge_pages = None).
+Updates the Virtual Machine Configuration with the specified input. Firecracker starts with default values for vCPU count (=1) and memory size (=128 MiB). A KVM microVM supports at most 32 vCPUs. A Nitro Enclave VM's maximum depends on the underlying hardware, up to an arbitrary hard cap of 1024. The vCPU count is validated against the limit for the VM being started when the VM is started rather than at configuration time, so a count above it is rejected then. A vCPU count of zero, or an odd count with SMT enabled, is still rejected at configuration time. With SMT enabled, the vCPU count is required to be either 1 or an even number; otherwise there are no restrictions regarding the vCPU count. If 2M hugetlbfs pages are specified, then `mem_size_mib` must be a multiple of 2. If any of the parameters has an incorrect value, the whole update fails. All parameters that are optional and are not specified are set to their default values (smt = false, track_dirty_pages = false, cpu_template = None, huge_pages = None).
 
 ### Parameters
 

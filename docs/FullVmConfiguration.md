@@ -8,6 +8,7 @@ Name | Type | Description | Notes
 **drives** | Option<[**Vec<models::Drive>**](Drive.md)> | Configurations for all block devices. | [optional]
 **boot_source** | Option<[**models::BootSource**](BootSource.md)> |  | [optional]
 **cpu_config** | Option<[**models::CpuConfig**](CpuConfig.md)> |  | [optional]
+**enclave** | Option<[**models::EnclaveConfig**](EnclaveConfig.md)> |  | [optional]
 **logger** | Option<[**models::Logger**](Logger.md)> |  | [optional]
 **machine_config** | Option<[**models::MachineConfiguration**](MachineConfiguration.md)> |  | [optional]
 **metrics** | Option<[**models::Metrics**](Metrics.md)> |  | [optional]
