@@ -15,9 +15,18 @@ use bytes::{Bytes, BytesMut};
 use futures::stream::StreamExt;
 use http_body_util::{Empty, Full, combinators::BoxBody};
 use hyper::{Request, Response, body::Incoming};
-use tokio::{fs, net::UnixStream};
+use tokio::{
+    fs,
+    net::UnixStream,
+    time::{Duration, Instant},
+};
 use tracing::{debug, info};
 use uuid::Uuid;
+
+/// How long connecting to a Firecracker API socket waits for it to accept.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+/// How often it retries meanwhile.
+const CONNECT_RETRY_INTERVAL: Duration = Duration::from_millis(1);
 
 /// Configuration for a [`Machine`].
 ///
@@ -197,20 +206,19 @@ impl<'m> Machine<'m> {
     async fn build_client(socket_path: &Path) -> Result<HttpClient, Error> {
         info!("connecting HTTP client to Firecracker at {socket_path:?}...");
 
-        let max_retries = 50; // 5 s total (50 × 100 ms)
-        let mut retries = 0;
+        // Firecracker binds its socket a few milliseconds after it starts, so
+        // a connection is retried often, not to add much to that wait.
+        let deadline = Instant::now() + CONNECT_TIMEOUT;
+        let mut next_report = Instant::now() + Duration::from_secs(1);
         let stream = loop {
             match UnixStream::connect(socket_path).await {
                 Ok(stream) => break stream,
-                Err(_e) if retries < max_retries => {
-                    retries += 1;
-                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                    if retries % 10 == 0 {
-                        info!(
-                            "Still waiting for Firecracker socket… ({}/{})",
-                            retries, max_retries
-                        );
+                Err(_e) if Instant::now() < deadline => {
+                    if Instant::now() >= next_report {
+                        info!("Still waiting for Firecracker socket {socket_path:?}…");
+                        next_report += Duration::from_secs(1);
                     }
+                    tokio::time::sleep(CONNECT_RETRY_INTERVAL).await;
                 }
                 Err(e) => return Err(e.into()),
             }
@@ -359,4 +367,35 @@ async fn read_response_body(response: Response<Incoming>) -> Result<String, Erro
         }
     }
     String::from_utf8(bytes.to_vec()).map_err(|e| Error::Other(e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::net::UnixListener;
+
+    use super::*;
+
+    /// Firecracker binds its API socket a few milliseconds after it starts:
+    /// attaching to it waits about that long, not for a retry interval.
+    #[tokio::test]
+    async fn attach_connects_soon_after_the_socket_appears() {
+        let socket = std::env::temp_dir().join(format!("fc-sdk-{}.sock", Uuid::new_v4()));
+        let started = Instant::now();
+        let listening = {
+            let socket = socket.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                UnixListener::bind(socket).unwrap()
+            })
+        };
+
+        Machine::attach(&socket).await.unwrap();
+        let elapsed = started.elapsed();
+        drop(listening.await.unwrap());
+        std::fs::remove_file(&socket).unwrap();
+        assert!(
+            elapsed < Duration::from_millis(50),
+            "attached after {elapsed:?}"
+        );
+    }
 }
